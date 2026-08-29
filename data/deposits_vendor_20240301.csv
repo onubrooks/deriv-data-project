@@ -1,0 +1,10 @@
+deposit_id,client_id,deposit_date,amount_usd,payment_method,currency_original,exchange_rate,status,processing_days,fee_usd
+VDEP001,CL003,2024-03-01,-250.00,bank_transfer,THB,35.20,completed,2,0.00
+VDEP002,CL001,2024-03-01,1500.00,credit_card,USD,1.00,completed,1,15.00
+VDEP003,CL007,2024-03-01,320.00,e_wallet,MYR,4.72,completed,1,3.20
+VDEP004,CL012,2024-03-01,2200.00,bank_transfer,SGD,1.34,completed,2,0.00
+VDEP005,CL005,2024-03-01,875.00,credit_card,GBP,0.79,completed,1,8.75
+VDEP006,CL018,2024-03-01,500.00,e_wallet,IDR,15750.00,pending,3,5.00
+VDEP007,CL009,2024-03-01,4200.00,bank_transfer,EUR,0.92,completed,2,0.00
+VDEP008,CL022,2024-03-01,150.00,credit_card,MYR,4.72,completed,1,2.50
+VDEP009,CL026,2024-03-01,3000.00,bank_transfer,SGD,1.34,pending,2,0.00

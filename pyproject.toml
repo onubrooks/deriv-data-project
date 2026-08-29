@@ -1,0 +1,9 @@
+[project]
+name = "deriv-data-project"
+version = "0.1.0"
+description = "Runnable DuckDB reference pipeline for the Deriv data engineering assessment"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.5.5",
+    "pytest>=9.1.1",
+]
