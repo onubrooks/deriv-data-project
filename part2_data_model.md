@@ -2,12 +2,14 @@
 
 ## Modeling approach
 
-A Kimball star schema is used because the primary workload is analytics across clients,
-deposits, trades, dates, and instruments, and the supplied data is already organized around
-stable business entities. Data Vault would improve source-system traceability at much larger
-scale, but its hubs, links, satellites, and business-vault layer add unjustified ceremony for
-this assessment. Raw immutable tables still preserve source lineage without exposing that
-complexity to analysts.
+The curated warehouse uses a Kimball star schema: measurable events such as deposits and
+trades sit in fact tables, while descriptive information such as client, date, and instrument
+sits in dimensions. This matches the questions analysts are likely to ask and keeps joins
+simple.
+
+A Data Vault would offer more source-level traceability at very large scale, but would add
+several extra table layers here. The raw tables already preserve the original source and
+audit trail, so that complexity is not justified for this dataset.
 
 ## Dimensional model
 
@@ -56,6 +58,9 @@ erDiagram
 
 ### Tables and grain
 
+“Grain” means exactly what one row represents. Stating it prevents accidental double
+counting.
+
 | Table | Grain | Key points |
 |---|---|---|
 | `dim_client` | One version of a client for one effective interval. | Surrogate `client_sk`; natural `client_id`; SCD2 risk/status; signup attributes; masked PII for general analytics. |
@@ -69,16 +74,14 @@ The local DuckDB prototype is too small to benefit from physical partitioning. T
 choices above follow anticipated time-range and client-level queries and avoid claiming a
 performance benefit on thirty-row fixtures.
 
-## Late-arriving dimensions
+## When a fact arrives before its client
 
-Facts are never discarded because their dimension arrived late. A missing client maps to a
-durable inferred `dim_client` member containing the natural `client_id`, `is_inferred = true`,
-and unknown descriptive fields. When the client record arrives, that member is completed in
-place if no historized attribute changed; otherwise normal SCD2 processing starts. Rows with
-structurally invalid identifiers such as the supplied `CL099` are initially quarantined and
-retried, with inferred-member creation reserved for a valid, trusted source contract.
+A deposit or trade is not discarded just because its client record is late. A trusted source
+can create a temporary client row containing the client ID and `is_inferred = true`. The row
+is completed when the client data arrives. An untrusted or invalid reference such as the
+vendor's `CL099` is quarantined instead of creating a potentially false client.
 
-## Historization choice
+## What history is kept
 
 - `risk_category` and `account_status`: **SCD Type 2**, because compliance and operational
   questions require knowing what classification/status applied at a historical time.
@@ -87,11 +90,11 @@ retried, with inferred-member creation reserved for a valid, trusted source cont
 - Stable descriptive fields use Type 1 correction unless a future contract explicitly
   requires their history.
 
-This hybrid preserves meaningful state history while keeping dimensions usable. Its trade-off
-is that a point-in-time client view joins the applicable SCD version and latest balance event
-at or before the requested timestamp.
+This split keeps meaningful history without creating a new client row for every balance
+movement. A point-in-time report combines the client version valid at that moment with the
+latest balance change at or before that time.
 
-## CDC application logic
+## How profile changes are applied
 
 Raw events are persisted before transformation, deduplicated by `(lsn, payload_hash)`, then
 applied in ascending LSN order inside a transaction:
@@ -110,12 +113,11 @@ applied in ascending LSN order inside a transaction:
 4. Record the LSN and outcome in `cdc_processing_ledger`. Enforce one current version per
    client and non-overlapping effective intervals.
 
-LSN is the source ordering authority; `commit_ts` supplies effective time. A lower LSN that
-arrives later is still applied before higher unapplied LSNs. A late event older than an
-already published watermark triggers bounded replay from the earliest affected LSN rather
-than being appended out of sequence.
+LSN decides the order; `commit_ts` decides when a change became effective. If an older LSN
+arrives late, the affected history is rebuilt from that point rather than appending the event
+in the wrong place.
 
-## Historical range reload
+## Reprocessing a historical date range
 
 November 2024 is reprocessed without editing published rows in place:
 

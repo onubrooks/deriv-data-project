@@ -145,3 +145,21 @@ uniqueness; and incomplete raw CDC/vendor provenance. Added regression coverage 
 cases and reduced balance history from ten payload observations to the five actual changes
 (LSNs 1005, 1008, 1012, 1015, and 1018). Final verification ran the CLI twice, a single-day
 replay, direct DuckDB invariant queries, compilation, and 14 passing pytest tests.
+
+## Deliverables — Readability and analytics value
+
+**Tool:** OpenAI Codex
+
+**Prompt (close paraphrase):** Make the deliverables easier to read and less technical where
+possible. Add an analytics folder with queries that demonstrate the value of the curated
+warehouse, then verify, commit, and push the changes.
+
+**Decision/change based on output:** Simplified the evaluator-facing language without
+removing required architecture, idempotency, history, quality, or PII decisions. Added five
+runnable DuckDB queries covering client value, country performance, instrument performance,
+deposit operations, and point-in-time client state. Running the queries exposed that the
+balance fact contains CDC changes rather than an opening balance for every client, so the
+queries label it as `latest_cdc_balance_usd` and leave unknown values null rather than
+presenting a false zero. Recorded verified fixture insights and kept opening-balance seeding
+as an explicit future improvement. Added a regression test that executes every published
+analytics query against the curated schema.

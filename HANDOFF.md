@@ -4,7 +4,8 @@
 
 Implementation and independent Codex review of the bounded DuckDB/Python prototype are
 complete. All eight embedded inputs were deterministically extracted, the default pipeline
-runs idempotently, and 14 focused tests pass.
+runs idempotently, and 15 focused tests pass. The evaluator-facing documents now lead with
+plain-language explanations, and `analytics/` contains five verified business queries.
 
 ## Decisions made & implemented
 
@@ -20,12 +21,14 @@ runs idempotently, and 14 focused tests pass.
   conflicting-LSN detection, actual-change balance grain, and replay that includes a full
   date-only end day while rebuilding later affected history.
 - **Verification:** Ran the default CLI twice, ran one-day replay, queried warehouse
-  invariants directly, and verified 14/14 passing tests in `tests/test_pipeline.py`.
+  invariants directly, and verified 15/15 passing tests in `tests/test_pipeline.py`.
+- **Analytics:** Added client value, country, instrument, deposit-operations, and point-in-time
+  queries. Verified all five against a fresh warehouse and documented representative results.
 
 ## Next action
 
-Review the committed repository as a submission candidate, practice the technical walkthrough,
-and push it to the intended GitHub repository when ready.
+Review the analytics results and simplified documents as a submission candidate, then
+practice the technical walkthrough.
 
 ## Resume references
 
@@ -33,4 +36,5 @@ and push it to the intended GitHub repository when ready.
 - AI provenance: `PROMPTS.md`
 - Pipeline entry point: `code/run_pipeline.py`
 - Test suite: `tests/test_pipeline.py`
+- Analytics guide: `analytics/README.md`
 - Detailed context: `.omx/context/deriv-assessment-definition-of-done-20260829T114300Z.md`

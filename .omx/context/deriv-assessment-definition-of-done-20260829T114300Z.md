@@ -21,4 +21,8 @@
   - Independent Codex review fixed transactional, replay-boundary, balance-grain, UTC,
     provenance, schema/input validation, and raw retry defects.
   - Default CLI is idempotent; single-day replay succeeds; 14 of 14 tests pass.
+  - Deliverables were simplified for evaluator readability without removing scoring detail.
+  - Five analytics queries were verified against a fresh warehouse and locked by a fifteenth
+    regression test; opening balance seeding remains an explicit future improvement for
+    complete point-in-time balance coverage.
 - **Next steps:** Codex final review, documentation cross-check, and final handoff.

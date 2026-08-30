@@ -2,11 +2,13 @@
 
 ## Design choice
 
-The production design uses a layered, platform-neutral batch architecture; DuckDB is the
-local executable reference. This keeps the submission runnable without pretending that an
-embedded database is the production scheduler or object store. Vendor files are
-authoritative for vendor-origin deposits, while existing warehouse deposits remain intact;
-conflicts are surfaced rather than silently overwritten.
+The pipeline keeps the original files, checks and cleans the data, then publishes trusted
+warehouse tables. The production design is not tied to one cloud provider. DuckDB provides
+a small local version that reviewers can run without setting up a database server.
+
+Vendor files are trusted for deposits created by that vendor. They do not overwrite the
+existing warehouse feed. If two records disagree, the pipeline sets them aside for review
+instead of guessing which value is correct.
 
 ```mermaid
 flowchart LR
@@ -25,13 +27,13 @@ flowchart LR
 
 ### Layer responsibilities
 
-| Layer | Responsibility | Evidence retained |
+| Layer | What happens here | Why it matters |
 |---|---|---|
-| Landing/raw | Store source payload unchanged; attach `file_name`, `file_hash`, `arrived_at`, `arrival_sequence`, `batch_id`, and row number. | Replayable input and audit trail preserving arrival order. |
-| Boundary validation | Check file shape, required columns, types, identifiers, and source-level uniqueness before transformation. | Check result, severity, rejected value, and reason. |
-| Staging | Normalize `method` to `payment_method`, parse dates/numerics, standardize source metadata, and calculate a canonical row hash. | Typed, source-aligned records without business overwrites. |
-| Reconciliation | Deduplicate vendor rows, compare them to canonical deposits, classify outcomes, and apply CDC state changes in LSN order while retaining raw arrival order. | Match status, mismatch detail, manifest/LSN state. |
-| Curated | Merge conforming deposits and populate client dimensions, facts, SCD history, and balance history. | Queryable warehouse state. |
+| Landing/raw | Keep each source record unchanged and add file, batch, arrival, and hash metadata. | Nothing is lost; any run can be audited or replayed. |
+| Validation | Check columns, types, IDs, and basic financial rules. | Bad data is visible before it reaches reports. |
+| Staging | Standardize names and data types, including `method` → `payment_method`. | Downstream logic sees one consistent shape. |
+| Reconciliation | Remove exact repeats, flag conflicts, and apply profile changes in LSN order. | Records are neither duplicated nor silently overwritten. |
+| Curated | Publish analysis-ready client, deposit, trade, and balance tables. | Analysts query stable business tables instead of raw files. |
 
 ## Data contracts
 
@@ -49,9 +51,9 @@ Freshness is measured from arrival metadata, not `deposit_date`; completeness re
 landing row counts to staged plus quarantined rows. Basic lineage is persisted as
 `source_file → batch_id → target_table/key`.
 
-## Idempotency
+## Safe reruns (idempotency)
 
-Idempotency is enforced at complementary levels:
+Running the same input twice must produce the same result. Four controls enforce this:
 
 1. **File manifest:** `ingestion_file_manifest` has a unique SHA-256 `file_hash`, source,
    name, status, row counts, and batch timestamps. An identical successful file is skipped;
@@ -65,11 +67,10 @@ Idempotency is enforced at complementary levels:
 4. **Atomic publication:** manifest/ledger updates and curated mutations occur in one
    DuckDB transaction. A failed batch remains retryable and never appears successful.
 
-## Vendor reconciliation
+## Matching the vendor feed to the warehouse
 
-Using only `deposit_id` across warehouse and vendor would be unsafe because their namespaces
-are visibly different (`DEP…` versus `VDEP…`). The canonical identity is therefore
-`(source_system, deposit_id)`. Vendor rows are classified as:
+The two sources use different ID ranges (`DEP…` and `VDEP…`), so a deposit is identified by
+both its source and its ID: `(source_system, deposit_id)`. Vendor rows are classified as:
 
 - `new`: unseen vendor key; load after validation.
 - `duplicate_identical`: same key and canonical row hash; retain one record and a duplicate
@@ -93,16 +94,15 @@ are in February. A missing expected delivery raises a freshness alert but does n
 an empty successful batch. When the file arrives, its unseen hash is processed automatically;
 business-date partitions affected by its rows are merged, not replaced blindly.
 
-## CDC updates and deletes
+## Applying client changes and deletes
 
 Arrival order is preserved as raw audit metadata but is not used to derive target state.
-Unapplied events are sorted by LSN and processed sequentially because LSN is the source
-transaction-log ordering contract.
-Risk/status changes set the current SCD2 row's exclusive `valid_to` to `commit_ts` and create
-a new version at that timestamp. Every balance change produces one `fact_client_balance_history` event keyed by
-LSN. A delete end-dates the current client version and marks it with `is_deleted = true` and
-`deleted_at = commit_ts`; historical versions and facts remain. The immutable raw CDC table
-is the audit trail, so no redundant copy-only audit table is added.
+Unapplied events are sorted by LSN because LSN records the true source transaction order.
+
+When risk or account status changes, the previous version gets an end time and a new version
+starts. Real balance changes go into the balance-history fact. A delete closes the active
+client version and records `is_deleted` and `deleted_at`; it never removes past client,
+deposit, trade, or balance records. The unchanged raw CDC table remains the audit trail.
 
 ## Explicit edge cases
 

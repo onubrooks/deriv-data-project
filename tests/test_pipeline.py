@@ -351,3 +351,14 @@ def test_missing_required_input_fails_loudly(fixtures_dir, tmp_path):
 
     with pytest.raises(FileNotFoundError, match="client_trades.json"):
         run_pipeline(str(tmp_path / "missing.duckdb"), data_dir)
+
+
+def test_analytics_queries_execute_against_curated_warehouse(fresh_db):
+    """Every published analytics example remains runnable against the curated schema."""
+    conn, data_dir = fresh_db
+    run_full_pipeline(conn, data_dir, "analytics_query_test")
+    analytics_dir = Path(__file__).resolve().parent.parent / "analytics"
+
+    for query_path in sorted(analytics_dir.glob("[0-9][0-9]_*.sql")):
+        rows = conn.execute(query_path.read_text(encoding="utf-8")).fetchall()
+        assert rows, f"Expected {query_path.name} to return at least one row"
